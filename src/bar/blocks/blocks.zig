@@ -7,6 +7,7 @@ pub const Ram = @import("ram.zig").Ram;
 pub const Shell = @import("shell.zig").Shell;
 pub const Battery = @import("battery.zig").Battery;
 pub const CpuTemp = @import("cpu_temp.zig").CpuTemp;
+pub const Volume = @import("volume.zig").Volume;
 
 pub const Block = struct {
     data: Data,
@@ -29,6 +30,7 @@ pub const Block = struct {
         shell: Shell,
         battery: Battery,
         cpu_temp: CpuTemp,
+        volume: Volume,
     };
 
     pub fn initStatic(text: []const u8, col: c_ulong, ul: bool) Block {
@@ -108,6 +110,23 @@ pub const Block = struct {
         };
     }
 
+    pub fn initVolume(
+        format: []const u8,
+        format_muted: []const u8,
+        sink: []const u8,
+        interval_secs: u64,
+        col: c_ulong,
+        ul: bool,
+    ) Block {
+        return .{
+            .data = .{ .volume = Volume.init(format, format_muted, sink, interval_secs, col) },
+            .last_update = 0,
+            .cached_content = undefined,
+            .cached_len = 0,
+            .underline = ul,
+        };
+    }
+
     pub fn update(self: *Block) bool {
         const interval_secs = self.interval();
         if (interval_secs == 0) return false;
@@ -126,6 +145,7 @@ pub const Block = struct {
             .shell => |*s| s.content(&self.cached_content),
             .battery => |*b| b.content(&self.cached_content),
             .cpu_temp => |*c| c.content(&self.cached_content),
+            .volume => |*v| v.content(&self.cached_content),
         };
 
         self.cached_len = result.len;
@@ -140,6 +160,7 @@ pub const Block = struct {
             .shell => |*s| s.interval(),
             .battery => |*b| b.interval(),
             .cpu_temp => |*c| c.interval(),
+            .volume => |*v| v.interval(),
         };
     }
 
@@ -151,6 +172,7 @@ pub const Block = struct {
             .shell => |s| s.color,
             .battery => |b| b.color,
             .cpu_temp => |c| c.color,
+            .volume => |v| v.color,
         };
     }
 
