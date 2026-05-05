@@ -1011,7 +1011,7 @@ fn luaBarBlockSystray(state: ?*c.lua_State) callconv(.c) c_int {
 fn luaBarBlockVolume(state: ?*c.lua_State) callconv(.c) c_int {
     const s = state orelse return 0;
 
-    c.lua_createtable(s, 0, 7);
+    c.lua_createtable(s, 0, 11);
 
     _ = c.lua_pushstring(s, "Volume");
     c.lua_setfield(s, -2, "__block_type");
@@ -1030,6 +1030,18 @@ fn luaBarBlockVolume(state: ?*c.lua_State) callconv(.c) c_int {
 
     _ = c.lua_getfield(s, 1, "click");
     c.lua_setfield(s, -2, "click");
+
+    _ = c.lua_getfield(s, 1, "left_click");
+    c.lua_setfield(s, -2, "left_click");
+
+    _ = c.lua_getfield(s, 1, "right_click");
+    c.lua_setfield(s, -2, "right_click");
+
+    _ = c.lua_getfield(s, 1, "scroll_up");
+    c.lua_setfield(s, -2, "scroll_up");
+
+    _ = c.lua_getfield(s, 1, "scroll_down");
+    c.lua_setfield(s, -2, "scroll_down");
 
     c.lua_createtable(s, 0, 2);
     _ = c.lua_getfield(s, 1, "format_muted");
