@@ -71,8 +71,8 @@ pub fn loadFile(path: []const u8) bool {
     return true;
 }
 
-pub fn loadConfig() bool {
-    const home = std.posix.getenv("HOME") orelse return false;
+pub fn loadConfig(env: *std.process.Environ.Map) bool {
+    const home = env.get("HOME") orelse return false;
     var path_buf: [512]u8 = undefined;
     const path = std.fmt.bufPrint(&path_buf, "{s}/.config/oxwm/config.lua", .{home}) catch return false;
     return loadFile(path);

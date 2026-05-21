@@ -9,17 +9,16 @@ const lua = @import("config/lua.zig");
 
 const WindowManager = window_manager.WindowManager;
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-    defer _ = gpa.deinit();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+    const env = init.environ_map;
 
-    const default_config_path = try getConfigPath(allocator);
+    const default_config_path = try getConfigPath(allocator, env);
     defer allocator.free(default_config_path);
 
     var config_path: []const u8 = default_config_path;
     var validate_mode: bool = false;
-    var args = std.process.args();
+    var args = init.minimal.args.iterate();
     _ = args.skip();
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "-c") or std.mem.eql(u8, arg, "--config")) {
@@ -31,7 +30,7 @@ pub fn main() !void {
             std.debug.print("v{s}\n", .{build_options.version});
             return;
         } else if (std.mem.eql(u8, arg, "--init")) {
-            initConfig(allocator);
+            initConfig(allocator, init.io, env);
             return;
         } else if (std.mem.eql(u8, arg, "--validate")) {
             validate_mode = true;
@@ -40,7 +39,7 @@ pub fn main() !void {
     }
 
     if (validate_mode) {
-        try validateConfig(allocator, config_path);
+        try validateConfig(allocator, init.io, config_path);
         return;
     }
 
@@ -49,11 +48,11 @@ pub fn main() !void {
     var config = config_mod.Config.init(allocator);
 
     if (lua.init(&config)) {
-        const loaded = if (std.fs.cwd().statFile(config_path)) |_| blk: {
+        const loaded = if (std.Io.Dir.cwd().statFile(init.io, config_path, .{})) |_| blk: {
             break :blk lua.loadFile(config_path);
         } else |_| blk: {
-            initConfig(allocator);
-            break :blk lua.loadConfig();
+            initConfig(allocator, init.io, env);
+            break :blk lua.loadConfig(env);
         };
 
         if (loaded) {
@@ -67,7 +66,7 @@ pub fn main() !void {
         config_mod.initializeDefaultConfig(&config);
     }
 
-    var wm = WindowManager.init(allocator, config, config_path) catch |err| {
+    var wm = WindowManager.init(allocator, config, config_path, env, init.io) catch |err| {
         std.debug.print("failed to start window manager: {}\n", .{err});
         return;
     };
@@ -114,33 +113,33 @@ fn printHelp() void {
     , .{});
 }
 
-fn initConfig(allocator: std.mem.Allocator) void {
-    const config_path = getConfigPath(allocator) catch return;
+fn initConfig(allocator: std.mem.Allocator, io: std.Io, env: *std.process.Environ.Map) void {
+    const config_path = getConfigPath(allocator, env) catch return;
     defer allocator.free(config_path);
 
     const template = @embedFile("templates/config.lua");
 
     if (std.fs.path.dirname(config_path)) |dir_path| {
-        var root = std.fs.openDirAbsolute("/", .{}) catch |err| {
+        var root = std.Io.Dir.openDirAbsolute(io, "/", .{}) catch |err| {
             std.debug.print("error: could not open root directory: {}\n", .{err});
             return;
         };
-        defer root.close();
+        defer root.close(io);
 
-        const relative_path = std.mem.trimLeft(u8, dir_path, "/");
-        root.makePath(relative_path) catch |err| {
+        const relative_path = std.mem.trimStart(u8, dir_path, "/");
+        root.createDirPath(io, relative_path) catch |err| {
             std.debug.print("error: could not create config directory: {}\n", .{err});
             return;
         };
     }
 
-    const file = std.fs.createFileAbsolute(config_path, .{}) catch |err| {
+    const file = std.Io.Dir.createFileAbsolute(io, config_path, .{}) catch |err| {
         std.debug.print("error: could not create config file: {}\n", .{err});
         return;
     };
-    defer file.close();
+    defer file.close(io);
 
-    _ = file.writeAll(template) catch |err| {
+    file.writeStreamingAll(io, template) catch |err| {
         std.debug.print("error: could not write config file: {}\n", .{err});
         return;
     };
@@ -150,19 +149,15 @@ fn initConfig(allocator: std.mem.Allocator) void {
     std.debug.print("No compilation needed - changes take effect immediately!\n", .{});
 }
 
-fn getConfigPath(allocator: std.mem.Allocator) ![]u8 {
-    const config_home = std.posix.getenv("XDG_CONFIG_HOME") orelse blk: {
-        const home = std.posix.getenv("HOME") orelse return error.CouldNotGetHomeDir;
-        break :blk try std.fs.path.join(allocator, &.{ home, ".config" });
-    };
-    // TODO: wtf is this shit
-    defer if (std.posix.getenv("XDG_CONFIG_HOME") == null) allocator.free(config_home);
-
-    const config_path = try std.fs.path.join(allocator, &.{ config_home, "oxwm", "config.lua" });
-    return config_path;
+fn getConfigPath(allocator: std.mem.Allocator, env: *std.process.Environ.Map) ![]u8 {
+    if (env.get("XDG_CONFIG_HOME")) |xdg| {
+        return std.fs.path.join(allocator, &.{ xdg, "oxwm", "config.lua" });
+    }
+    const home = env.get("HOME") orelse return error.CouldNotGetHomeDir;
+    return std.fs.path.join(allocator, &.{ home, ".config", "oxwm", "config.lua" });
 }
 
-fn validateConfig(allocator: std.mem.Allocator, config_path: []const u8) !void {
+fn validateConfig(allocator: std.mem.Allocator, io: std.Io, config_path: []const u8) !void {
     var config = config_mod.Config.init(allocator);
     defer config.deinit();
 
@@ -172,7 +167,7 @@ fn validateConfig(allocator: std.mem.Allocator, config_path: []const u8) !void {
     }
     defer lua.deinit();
 
-    _ = std.fs.cwd().statFile(config_path) catch |err| {
+    _ = std.Io.Dir.cwd().statFile(io, config_path, .{}) catch |err| {
         std.debug.print("error: config file not found: {s}\n", .{config_path});
         std.debug.print("  {}\n", .{err});
         std.process.exit(1);

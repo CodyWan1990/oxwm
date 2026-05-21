@@ -27,11 +27,11 @@ pub const Battery = struct {
         };
     }
 
-    pub fn content(self: *Battery, buffer: []u8) []const u8 {
+    pub fn content(self: *Battery, io: std.Io, buffer: []u8) []const u8 {
         var path_buf: [128]u8 = undefined;
 
-        const capacity = self.readBatteryFile(&path_buf, "capacity") orelse return buffer[0..0];
-        const status = self.readBatteryStatus(&path_buf) orelse return buffer[0..0];
+        const capacity = self.readBatteryFile(io, &path_buf, "capacity") orelse return buffer[0..0];
+        const status = self.readBatteryStatus(io, &path_buf) orelse return buffer[0..0];
 
         const format = switch (status) {
             .charging => self.format_charging,
@@ -47,14 +47,14 @@ pub const Battery = struct {
 
     const Status = enum { charging, discharging, full };
 
-    fn readBatteryStatus(self: *Battery, path_buf: *[128]u8) ?Status {
+    fn readBatteryStatus(self: *Battery, io: std.Io, path_buf: *[128]u8) ?Status {
         const path = std.fmt.bufPrint(path_buf, "/sys/class/power_supply/{s}/status", .{self.battery_name}) catch return null;
 
-        const file = std.fs.openFileAbsolute(path, .{}) catch return null;
-        defer file.close();
+        const file = std.Io.Dir.openFileAbsolute(io, path, .{}) catch return null;
+        defer file.close(io);
 
         var buf: [32]u8 = undefined;
-        const len = file.read(&buf) catch return null;
+        const len = file.readStreaming(io, &.{&buf}) catch return null;
         const status_str = std.mem.trim(u8, buf[0..len], " \n\r\t");
 
         if (std.mem.eql(u8, status_str, "Charging")) return .charging;
@@ -64,14 +64,14 @@ pub const Battery = struct {
         return .discharging;
     }
 
-    fn readBatteryFile(self: *Battery, path_buf: *[128]u8, file_name: []const u8) ?u8 {
+    fn readBatteryFile(self: *Battery, io: std.Io, path_buf: *[128]u8, file_name: []const u8) ?u8 {
         const path = std.fmt.bufPrint(path_buf, "/sys/class/power_supply/{s}/{s}", .{ self.battery_name, file_name }) catch return null;
 
-        const file = std.fs.openFileAbsolute(path, .{}) catch return null;
-        defer file.close();
+        const file = std.Io.Dir.openFileAbsolute(io, path, .{}) catch return null;
+        defer file.close(io);
 
         var buf: [16]u8 = undefined;
-        const len = file.read(&buf) catch return null;
+        const len = file.readStreaming(io, &.{&buf}) catch return null;
         const value_str = std.mem.trim(u8, buf[0..len], " \n\r\t");
 
         return std.fmt.parseInt(u8, value_str, 10) catch null;

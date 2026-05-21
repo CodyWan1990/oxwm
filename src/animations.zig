@@ -30,23 +30,23 @@ pub const ScrollAnimation = struct {
     easing: Easing = .ease_out,
     active: bool = false,
 
-    pub fn start(self: *ScrollAnimation, from: i32, to: i32, config: AnimationConfig) void {
+    pub fn start(self: *ScrollAnimation, io: std.Io, from: i32, to: i32, config: AnimationConfig) void {
         if (from == to) {
             self.active = false;
             return;
         }
         self.start_value = from;
         self.end_value = to;
-        self.start_time = std.time.milliTimestamp();
+        self.start_time = std.Io.Timestamp.now(io, .awake).toMilliseconds();
         self.duration_ms = config.duration_ms;
         self.easing = config.easing;
         self.active = true;
     }
 
-    pub fn update(self: *ScrollAnimation) ?i32 {
+    pub fn update(self: *ScrollAnimation, io: std.Io) ?i32 {
         if (!self.active) return null;
 
-        const now = std.time.milliTimestamp();
+        const now = std.Io.Timestamp.now(io, .awake).toMilliseconds();
         const elapsed = now - self.start_time;
 
         if (elapsed >= @as(i64, @intCast(self.duration_ms))) {

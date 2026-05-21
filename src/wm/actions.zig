@@ -16,56 +16,59 @@ const WindowManager = wm_mod.WindowManager;
 
 const snap_distance: i32 = 32;
 
+// execvpeZ removed in zig 0.16 std lib rework (codeberg.org/ziglang/zig/issues/31694) with no replacement
+extern "c" fn execvp(file: [*:0]const u8, argv: [*:null]const ?[*:0]const u8) c_int;
+
 pub fn spawnChildSetup(wm: *WindowManager) void {
     _ = std.c.setsid();
-    if (wm.x11_fd >= 0) std.posix.close(@intCast(wm.x11_fd));
+    if (wm.x11_fd >= 0) _ = std.c.close(@intCast(wm.x11_fd));
     const sigchld_handler = std.posix.Sigaction{
         .handler = .{ .handler = std.posix.SIG.DFL },
         .mask = std.mem.zeroes(std.posix.sigset_t),
         .flags = 0,
     };
-    std.posix.sigaction(std.posix.SIG.CHLD, &sigchld_handler, null);
+    std.posix.sigaction(.CHLD, &sigchld_handler, null);
 }
 
 pub fn spawnCommand(wm: *WindowManager, cmd: []const u8) void {
     std.debug.print("running cmd: {s}\n", .{cmd});
-    const pid = std.posix.fork() catch return;
+    const pid = std.c.fork();
+    if (pid < 0) return;
     if (pid == 0) {
-        const grandchild = std.posix.fork() catch std.posix.exit(1);
-        if (grandchild != 0) std.posix.exit(0);
+        const grandchild = std.c.fork();
+        if (grandchild < 0) std.c._exit(1);
+        if (grandchild != 0) std.c._exit(0);
         spawnChildSetup(wm);
         var cmd_buf: [1024]u8 = undefined;
-        if (cmd.len >= cmd_buf.len) {
-            std.posix.exit(1);
-        }
+        if (cmd.len >= cmd_buf.len) std.c._exit(1);
         @memcpy(cmd_buf[0..cmd.len], cmd);
         cmd_buf[cmd.len] = 0;
         const argv = [_:null]?[*:0]const u8{ "sh", "-c", @ptrCast(&cmd_buf) };
-        _ = std.posix.execvpeZ("sh", &argv, std.c.environ) catch {};
-        std.posix.exit(1);
+        _ = execvp("sh", &argv);
+        std.c._exit(1);
     }
-    _ = std.posix.waitpid(pid, 0);
+    _ = std.c.waitpid(pid, null, 0);
 }
 
 pub fn spawnTerminal(wm: *WindowManager) void {
-    const pid = std.posix.fork() catch return;
+    const pid = std.c.fork();
+    if (pid < 0) return;
     if (pid == 0) {
-        const grandchild = std.posix.fork() catch std.posix.exit(1);
-        if (grandchild != 0) std.posix.exit(0);
+        const grandchild = std.c.fork();
+        if (grandchild < 0) std.c._exit(1);
+        if (grandchild != 0) std.c._exit(0);
         spawnChildSetup(wm);
         var term_buf: [256]u8 = undefined;
         const terminal = wm.config.terminal;
-        if (terminal.len >= term_buf.len) {
-            std.posix.exit(1);
-        }
+        if (terminal.len >= term_buf.len) std.c._exit(1);
         @memcpy(term_buf[0..terminal.len], terminal);
         term_buf[terminal.len] = 0;
         const term_ptr: [*:0]const u8 = @ptrCast(&term_buf);
         const argv = [_:null]?[*:0]const u8{term_ptr};
-        _ = std.posix.execvpeZ(term_ptr, &argv, std.c.environ) catch {};
-        std.posix.exit(1);
+        _ = execvp(term_ptr, &argv);
+        std.c._exit(1);
     }
-    _ = std.posix.waitpid(pid, 0);
+    _ = std.c.waitpid(pid, null, 0);
 }
 
 pub fn movestack(direction: i32, wm: *WindowManager) void {
@@ -870,7 +873,7 @@ pub fn reloadLoadConfig(wm: *WindowManager) void {
     const loaded = if (wm.config_path) |path|
         lua.loadFile(path)
     else
-        lua.loadConfig();
+        lua.loadConfig(wm.env);
 
     if (loaded) {
         if (wm.config_path) |path| {
@@ -905,9 +908,9 @@ pub fn executeAction(action: config_mod.Action, int_arg: i32, str_arg: ?[]const 
                 }
             }
         },
-        .focus_next => focusstack(int_arg, wm),
+        .focus_next => focusstack(if (int_arg == 0) 1 else int_arg, wm),
         .focus_prev => focusstack(-1, wm),
-        .move_next => movestack(int_arg, wm),
+        .move_next => movestack(if (int_arg == 0) 1 else int_arg, wm),
         .move_prev => movestack(-1, wm),
         .focus_master => focusMaster(wm),
         .focus_first_stack => focusFirstStack(wm),

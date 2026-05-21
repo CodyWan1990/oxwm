@@ -24,34 +24,32 @@ pub const Volume = struct {
         };
     }
 
-    pub fn content(self: *Volume, buffer: []u8) []const u8 {
-        if (self.isMuted()) {
+    pub fn content(self: *Volume, io: std.Io, gpa: std.mem.Allocator, buffer: []u8) []const u8 {
+        if (self.isMuted(io, gpa)) {
             return format_util.substitute(self.format_muted, "", buffer);
         }
-        const percent = self.readVolume() orelse return buffer[0..0];
+        const percent = self.readVolume(io, gpa) orelse return buffer[0..0];
         var pct_buf: [8]u8 = undefined;
         const pct_str = std.fmt.bufPrint(&pct_buf, "{d}", .{percent}) catch return buffer[0..0];
         return format_util.substitute(self.format, pct_str, buffer);
     }
 
-    fn isMuted(self: *Volume) bool {
-        const result = std.process.Child.run(.{
-            .allocator = std.heap.page_allocator,
+    fn isMuted(self: *Volume, io: std.Io, gpa: std.mem.Allocator) bool {
+        const result = std.process.run(gpa, io, .{
             .argv = &.{ "pactl", "get-sink-mute", self.sink },
         }) catch return false;
-        defer std.heap.page_allocator.free(result.stdout);
-        defer std.heap.page_allocator.free(result.stderr);
+        defer gpa.free(result.stdout);
+        defer gpa.free(result.stderr);
         // Output: "Mute: yes" or "Mute: no"
         return std.mem.indexOf(u8, result.stdout, "yes") != null;
     }
 
-    fn readVolume(self: *Volume) ?u32 {
-        const result = std.process.Child.run(.{
-            .allocator = std.heap.page_allocator,
+    fn readVolume(self: *Volume, io: std.Io, gpa: std.mem.Allocator) ?u32 {
+        const result = std.process.run(gpa, io, .{
             .argv = &.{ "pactl", "get-sink-volume", self.sink },
         }) catch return null;
-        defer std.heap.page_allocator.free(result.stdout);
-        defer std.heap.page_allocator.free(result.stderr);
+        defer gpa.free(result.stdout);
+        defer gpa.free(result.stderr);
         // Output (one line): "Volume: front-left: 19661 /  30% / -24.61 dB ..."
         // Strategy: find the first '%' and walk back to the start of the number.
         const out = result.stdout;

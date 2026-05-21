@@ -52,6 +52,8 @@ pub const Cursors = struct {
 
 pub const WindowManager = struct {
     allocator: mem.Allocator,
+    env: *std.process.Environ.Map,
+    io: std.Io,
 
     /// The connection to the X server.
     display: Display,
@@ -94,7 +96,7 @@ pub const WindowManager = struct {
     ///
     /// Returns an error if the display cannot be opened or another WM is
     /// already running.
-    pub fn init(allocator: mem.Allocator, config: Config, config_path: ?[]const u8) !WindowManager {
+    pub fn init(allocator: mem.Allocator, config: Config, config_path: ?[]const u8, env: *std.process.Environ.Map, io: std.Io) !WindowManager {
         var display = try Display.open();
         errdefer display.close();
 
@@ -111,6 +113,8 @@ pub const WindowManager = struct {
 
         var wm = WindowManager{
             .allocator = allocator,
+            .env = env,
+            .io = io,
             .display = display,
             .x11_fd = x11_fd,
             .wm_check_window = atoms_result.check_window,
@@ -680,7 +684,7 @@ pub const WindowManager = struct {
 
             var current_bar = self.bars;
             while (current_bar) |bar| {
-                bar.updateBlocks();
+                bar.updateBlocks(self.io, self.allocator);
                 bar.draw(self.display.handle, self.config);
                 current_bar = bar.next;
             }

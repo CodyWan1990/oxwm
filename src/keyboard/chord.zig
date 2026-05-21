@@ -22,19 +22,19 @@ pub const ChordState = struct {
     ///
     /// Returns `false` if the sequence is already at maximum length, in which
     /// case the caller should call `reset` before retrying.
-    pub fn push(self: *ChordState, key: config.KeyPress) bool {
+    pub fn push(self: *ChordState, io: std.Io, key: config.KeyPress) bool {
         if (self.index >= max_chord_len) return false;
         self.keys[self.index] = key;
         self.index += 1;
-        self.last_timestamp = std.time.milliTimestamp();
+        self.last_timestamp = std.Io.Timestamp.now(io, .awake).toMilliseconds();
 
         return true;
     }
 
     /// Returns true if the sequence has timed out and should be reset.
-    pub fn isTimedOut(self: *const ChordState) bool {
+    pub fn isTimedOut(self: *const ChordState, io: std.Io) bool {
         if (self.index == 0) return false;
-        return (std.time.milliTimestamp() - self.last_timestamp) >= timeout_ms;
+        return (std.Io.Timestamp.now(io, .awake).toMilliseconds() - self.last_timestamp) >= timeout_ms;
     }
 
     /// Clears the sequence and releases the keyboard grab if one is held.

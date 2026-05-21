@@ -11,7 +11,7 @@ const Block = blocks_mod.Block;
 pub const Systray = systray_mod.Systray;
 
 fn getLayoutSymbol(layout_index: u32, config: config_mod.Config) []const u8 {
-    const layout = std.meta.intToEnum(config_mod.Layouts, layout_index) catch return "[?]";
+    const layout = std.enums.fromInt(config_mod.Layouts, layout_index) orelse return "[?]";
     return switch (layout) {
         .tiling => config.layout_tile_symbol,
         .monocle => config.layout_monocle_symbol,
@@ -318,10 +318,10 @@ pub const Bar = struct {
     }
 
     /// Updates all blocks and marks the bar dirty if any block changed.
-    pub fn updateBlocks(self: *Bar) void {
+    pub fn updateBlocks(self: *Bar, io: std.Io, gpa: std.mem.Allocator) void {
         var changed = false;
         for (self.blocks.items) |*block| {
-            if (block.update()) changed = true;
+            if (block.update(io, gpa)) changed = true;
         }
         if (changed) self.needs_redraw = true;
     }

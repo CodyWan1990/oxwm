@@ -13,12 +13,12 @@ pub const Ram = struct {
         };
     }
 
-    pub fn content(self: *Ram, buffer: []u8) []const u8 {
-        const file = std.fs.openFileAbsolute("/proc/meminfo", .{}) catch return buffer[0..0];
-        defer file.close();
+    pub fn content(self: *Ram, io: std.Io, buffer: []u8) []const u8 {
+        const file = std.Io.Dir.openFileAbsolute(io, "/proc/meminfo", .{}) catch return buffer[0..0];
+        defer file.close(io);
 
         var read_buffer: [512]u8 = undefined;
-        const bytes_read = file.read(&read_buffer) catch return buffer[0..0];
+        const bytes_read = file.readStreaming(io, &.{&read_buffer}) catch return buffer[0..0];
         const file_content = read_buffer[0..bytes_read];
 
         var total: u64 = 0;

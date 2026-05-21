@@ -402,7 +402,7 @@ pub fn tickAnimations(wm: *WindowManager) void {
     if (!wm.scroll_animation.isActive()) return;
 
     const monitor = wm.selected_monitor orelse return;
-    if (wm.scroll_animation.update()) |new_offset| {
+    if (wm.scroll_animation.update(wm.io)) |new_offset| {
         monitor.scroll_offset = new_offset;
         arrange(monitor, wm);
     }
@@ -430,7 +430,7 @@ pub fn scrollLayout(direction: i32, wm: *WindowManager) void {
     var target = current + direction * scroll_step;
     target = @max(0, @min(target, max_scroll));
 
-    wm.scroll_animation.start(monitor.scroll_offset, target, wm.animation_config);
+    wm.scroll_animation.start(wm.io, monitor.scroll_offset, target, wm.animation_config);
 }
 
 pub fn scrollToWindow(client: *Client, animate: bool, wm: *WindowManager) void {
@@ -440,7 +440,7 @@ pub fn scrollToWindow(client: *Client, animate: bool, wm: *WindowManager) void {
     const target = scrolling.getTargetScrollForWindow(monitor, client);
 
     if (animate) {
-        wm.scroll_animation.start(monitor.scroll_offset, target, wm.animation_config);
+        wm.scroll_animation.start(wm.io, monitor.scroll_offset, target, wm.animation_config);
     } else {
         monitor.scroll_offset = target;
         arrange(monitor, wm);

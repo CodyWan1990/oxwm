@@ -134,11 +134,11 @@ fn handleKeyPress(event: *xlib.XKeyEvent, wm: *WindowManager) void {
 
     const clean_state = event.state & ~@as(c_uint, xlib.LockMask | xlib.Mod2Mask);
 
-    if (wm.chord.isTimedOut()) {
+    if (wm.chord.isTimedOut(wm.io)) {
         wm.chord.reset(wm.display.handle);
     }
 
-    _ = wm.chord.push(.{ .mod_mask = clean_state, .keysym = keysym });
+    _ = wm.chord.push(wm.io, .{ .mod_mask = clean_state, .keysym = keysym });
 
     for (wm.config.keybinds.items) |keybind| {
         if (keybind.key_count == 0) continue;
@@ -257,7 +257,7 @@ fn handleButtonPress(event: *xlib.XButtonEvent, wm: *WindowManager) void {
             actions.spawnCommand(wm, click_action.command);
             // Re-poll blocks now so e.g. volume scroll reflects immediately.
             // handleBlockButton already reset the matched block's last_update.
-            bar.updateBlocks();
+            bar.updateBlocks(wm.io, wm.allocator);
         }
         return;
     }

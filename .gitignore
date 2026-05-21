@@ -2,6 +2,7 @@
 zig-out/
 .zig-cache/
 .direnv/
+zig-pkg/
 
 # Nix
 result

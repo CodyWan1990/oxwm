@@ -230,11 +230,11 @@ pub const Config = struct {
     scheme_occupied: ColorScheme = .{ .foreground = 0x0db9d7, .background = 0x1a1b26, .border = 0x0db9d7 },
     scheme_urgent: ColorScheme = .{ .foreground = 0xf7768e, .background = 0x1a1b26, .border = 0xf7768e },
 
-    keybinds: std.ArrayListUnmanaged(Keybind) = .{},
-    rules: std.ArrayListUnmanaged(Rule) = .{},
-    blocks: std.ArrayListUnmanaged(Block) = .{},
-    buttons: std.ArrayListUnmanaged(MouseButton) = .{},
-    autostart: std.ArrayListUnmanaged([]const u8) = .{},
+    keybinds: std.ArrayListUnmanaged(Keybind) = .empty,
+    rules: std.ArrayListUnmanaged(Rule) = .empty,
+    blocks: std.ArrayListUnmanaged(Block) = .empty,
+    buttons: std.ArrayListUnmanaged(MouseButton) = .empty,
+    autostart: std.ArrayListUnmanaged([]const u8) = .empty,
 
     pub fn init(allocator: std.mem.Allocator) Config {
         return Config{
